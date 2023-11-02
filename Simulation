@@ -1,0 +1,115 @@
+########################################################################
+#  R Script to Simulate the AC1 metrics performance across
+#  varying values of agreement.
+#
+#  WRITTEN 07/18/23 WJB; UPDATED 07/25/23 WJB
+########################################################################
+#  Load Required Packages
+library(tidyverse)
+library(irrCAC)
+library(irr)
+########################################################################
+#  Creating a test data set
+#
+gen_dat <- function(p, n = 1000) {
+  #----------------------------------------------------------------------
+  #  R script function to generate data for simulation
+  #
+  #  INPUT: p = agreement percentage
+  #         n = sample size
+  #
+  #  OUTPUT: test_dat = tibble of test data
+  #
+  #  WRITTEN: 02/02/2023 AS; UPDATED 07/25/2023 WJB
+  #----------------------------------------------------------------------
+  #
+  #  Generate data for raters
+  #
+  test_dat <- tibble(
+    "R1" = rbinom(n = n, size = 1, prob = p),
+    "R2" = rbinom(n = n, size = 1, prob = p)
+  )
+  return(test_dat)
+}
+########################################################################
+#  Simulate p-values for each of the tests
+#
+sim <- function(p, n, nsims, alpha = 0.05) {
+  #----------------------------------------------------------------------
+  #  R script function to simulate p-values of different inter-rater
+  #  reliability statistics
+  #
+  #  INPUT: p = agreement percentage
+  #         n = sample size
+  #         nsims = number of simulations
+  #         alpha = alpha level
+  #
+  #  OUTPUT: results = a tibble with means and sizes for the four tests
+  #                    considered
+  #
+  #  WRITTEN: 02/02/2023 AS; UPDATED 07/25/2023 WJB
+  #----------------------------------------------------------------------
+  #
+  #  Create empty vectors for storage
+  #
+  true_p <- NULL
+  ac1 <- NULL
+  kappa <- NULL
+  krippen <- NULL
+  fleiss <- NULL
+  #
+  #  Simulation
+  #
+  for (i in 1:nsims) {
+    #
+    #  Generate test data
+    #
+    test_data <- gen_dat(p, n)
+    #
+    #  Calculate percentage agreement
+    #
+    true_p[i] <- sum(test_data[, 1] == test_data[, 2]) / n
+    #
+    #  calculate test statistics
+    #
+    ac1[i] <- gwet.ac1.raw(test_data)$est$p.value
+    fleiss[i] <- fleiss.kappa.raw(test_data)$est$p.value
+    krippen[i] <- krippen.alpha.raw(test_data)$est$p.value
+    kappa[i] <- kappa2(test_data)$p.value
+  }
+  #
+  #  Tibble of results
+  #
+  results <- tibble(
+    "Prop_Yes" = mean(true_p),
+    "AC1_Mean" = mean(ac1),
+    "AC1_Size" = sum(ac1 < alpha) / nsims,
+    "Fleiss_Mean" = mean(fleiss),
+    "Fleiss_Size" = sum(fleiss < alpha) / nsims,
+    "Krippen_Mean" = mean(krippen),
+    "Krippen_Size" = sum(krippen < alpha) / nsims,
+    "Kappa_Mean" = mean(kappa),
+    "Kappa_Size" = sum(kappa < alpha) / nsims
+  )
+  #
+  return(results)
+}
+########################################################################
+#  Run simulation
+set.seed(2023)
+yes_vector <- seq(from = .5, to = .99, by = .01)
+sim_results_50 <- bind_rows(map(yes_vector, sim, n = 50, nsims = 1e5))
+sim_results_100 <- bind_rows(map(yes_vector, sim, n = 100, nsims = 1e5))
+sim_results_500 <- bind_rows(map(yes_vector, sim, n = 500, nsims = 1e5))
+sim_results_1000 <- bind_rows(map(yes_vector, sim, n = 1000, nsims = 1e5))
+
+# Save output
+saveRDS(sim_results_50, file = "sim_results_50.rds")
+saveRDS(sim_results_100, file = "sim_results_100.rds")
+saveRDS(sim_results_500, file = "sim_results_500.rds")
+saveRDS(sim_results_1000, file = "sim_results_1000.rds")
+
+write_csv(sim_results_50, "sim_results_50.csv")
+write_csv(sim_results_100, "sim_results_100.csv")
+write_csv(sim_results_500, "sim_results_500.csv")
+write_csv(sim_results_1000, "sim_results_1000.csv")
